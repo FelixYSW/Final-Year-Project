@@ -1,102 +1,137 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, Text, SafeAreaView } from 'react-native';
-import { Footprints } from 'lucide-react-native';
+import { StyleSheet, View, TouchableOpacity, Text, SafeAreaView, ActivityIndicator } from 'react-native';
+import { Footprints, Navigation, X } from 'lucide-react-native';
 import CameraView from '@/components/CameraView';
 import MacroMapView from '@/components/MacroMapView';
+import SearchBar from '@/components/SearchBar';
+
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || '';
+
+// App States: 'default' | 'preview' | 'navigating'
+type AppState = 'default' | 'preview' | 'navigating';
+
+interface Coords {
+  lat: number;
+  lng: number;
+}
 
 export default function App() {
+  const [appState, setAppState] = useState<AppState>('default');
   const [destination, setDestination] = useState('');
-  
-  // App States: 'default' | 'preview' | 'navigating'
-  const [appState, setAppState] = useState<'default' | 'preview' | 'navigating'>('default');
-  
-  // Routing Details
-  const [distance, setDistance] = useState('0 m');
-  const [duration, setDuration] = useState('0 mins');
+  const [destCoords, setDestCoords] = useState<Coords | null>(null);
+  const [distance, setDistance] = useState('');
+  const [duration, setDuration] = useState('');
+  const [isFetchingRoute, setIsFetchingRoute] = useState(false);
 
-  const handleSearch = () => {
-    if (destination.trim()) {
-      // Move from Default -> Preview
-      // (Later we will fetch real Directions API data here and set distance/duration)
-      setDistance('1.2 km'); // Dummy data for UI
-      setDuration('15 mins'); // Dummy data for UI
-      setAppState('preview');
+  const handlePlaceSelected = async (placeName: string, lat: number, lng: number) => {
+    setDestination(placeName);
+    setDestCoords({ lat, lng });
+    setIsFetchingRoute(true);
+    setAppState('preview');
+
+    try {
+      // Fetch real walking distance & duration from Google Directions API
+      const origin = 'current_location'; // Will be replaced with real coords from MacroMapView
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/directions/json?origin=${lat}&destination=${lat},${lng}&mode=walking&key=${GOOGLE_MAPS_API_KEY}`
+      );
+      const data = await response.json();
+
+      if (data.routes && data.routes.length > 0) {
+        const leg = data.routes[0].legs[0];
+        setDistance(leg.distance.text);
+        setDuration(leg.duration.text);
+      } else {
+        setDistance('N/A');
+        setDuration('N/A');
+      }
+    } catch (e) {
+      setDistance('N/A');
+      setDuration('N/A');
+    } finally {
+      setIsFetchingRoute(false);
     }
   };
 
   const startNavigation = () => {
-    // Move from Preview -> Navigating
     setAppState('navigating');
   };
 
   const cancelNavigation = () => {
-    // Return to Default
     setAppState('default');
     setDestination('');
-    setDistance('0 m');
-    setDuration('0 mins');
+    setDestCoords(null);
+    setDistance('');
+    setDuration('');
   };
 
   return (
     <View style={styles.container}>
-      {/* 
-        Background Layer: 
-        If in default mode, show Camera.
-        If previewing or navigating, show the Map.
-      */}
-      {appState === 'default' ? <CameraView /> : <MacroMapView />}
+      {appState === 'default'
+        ? <CameraView />
+        : <MacroMapView destCoords={destCoords} />
+      }
 
-      <SafeAreaView style={styles.overlay}>
+      <SafeAreaView style={styles.overlay} pointerEvents="box-none">
+
+        {/* DEFAULT MODE — Search bar */}
         {appState === 'default' && (
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Where to?"
-              placeholderTextColor="#666"
-              value={destination}
-              onChangeText={setDestination}
-              onSubmitEditing={handleSearch}
-            />
-            <TouchableOpacity style={styles.goButton} onPress={handleSearch}>
-              <Text style={styles.goButtonText}>Search</Text>
-            </TouchableOpacity>
-          </View>
+          <SearchBar onPlaceSelected={handlePlaceSelected} />
         )}
 
+        {/* PREVIEW MODE — Route summary card */}
         {appState === 'preview' && (
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>Destination: {destination}</Text>
-            <View style={styles.routeDetailsRow}>
-              <Footprints color="#007AFF" size={20} />
-              <Text style={styles.routeDetailsText}> {duration} ({distance})</Text>
-            </View>
-            
+          <View style={styles.card}>
+            <Text style={styles.cardTitle} numberOfLines={2}>{destination}</Text>
+
+            {isFetchingRoute ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#208AEF" />
+                <Text style={styles.loadingText}>Calculating route...</Text>
+              </View>
+            ) : (
+              <View style={styles.routeRow}>
+                <Footprints color="#208AEF" size={20} />
+                <Text style={styles.routeText}>{duration}  •  {distance}</Text>
+              </View>
+            )}
+
             <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.cancelButton} onPress={cancelNavigation}>
+              <TouchableOpacity style={styles.cancelButton} onPress={cancelNavigation} accessibilityLabel="Cancel destination">
+                <X color="#fff" size={20} />
                 <Text style={styles.buttonText}>Cancel</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.startButton} onPress={startNavigation}>
+
+              <TouchableOpacity
+                style={[styles.startButton, isFetchingRoute && styles.disabledButton]}
+                onPress={startNavigation}
+                disabled={isFetchingRoute}
+                accessibilityLabel="Start navigation"
+              >
+                <Navigation color="#fff" size={20} />
                 <Text style={styles.buttonText}>Start Navigation</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
+        {/* NAVIGATION MODE — Status bar */}
         {appState === 'navigating' && (
-          <View style={styles.navHeader}>
-            <View style={styles.navHeaderLeft}>
-              <Text style={styles.navText}>Navigating to: {destination}</Text>
-              <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 2}}>
-                <Footprints color="#007AFF" size={16} />
-                <Text style={styles.navSubText}> {duration} ({distance})</Text>
+          <View style={styles.navBar}>
+            <View style={styles.navLeft}>
+              <Text style={styles.navTitle} numberOfLines={1}>{destination}</Text>
+              <View style={styles.routeRow}>
+                <Footprints color="#208AEF" size={16} />
+                <Text style={styles.routeTextSmall}>{duration}  •  {distance}</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.cancelButton} onPress={cancelNavigation}>
+            <TouchableOpacity style={styles.endButton} onPress={cancelNavigation} accessibilityLabel="End route">
+              <X color="#fff" size={20} />
               <Text style={styles.buttonText}>End</Text>
             </TouchableOpacity>
           </View>
         )}
+
       </SafeAreaView>
     </View>
   );
@@ -110,114 +145,124 @@ const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
     top: 0,
-    width: '100%',
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
-  searchContainer: {
-    flexDirection: 'row',
+
+  // Preview / Nav shared card
+  card: {
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 16,
+    padding: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 6,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 18,
-    color: '#000',
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 8,
   },
-  goButton: {
-    backgroundColor: '#208AEF',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 6,
-    marginLeft: 10,
-  },
-  goButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  previewCard: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  previewTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 5,
-  },
-  routeDetailsRow: {
+
+  // Route info row
+  routeRow: {
     flexDirection: 'row',
-    marginBottom: 15,
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
   },
-  routeDetailsText: {
-    fontSize: 16,
-    color: '#007AFF',
+  routeText: {
+    fontSize: 15,
+    color: '#208AEF',
     fontWeight: '600',
   },
+  routeTextSmall: {
+    fontSize: 13,
+    color: '#208AEF',
+    fontWeight: '600',
+  },
+
+  // Loading
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#666',
+  },
+
+  // Action buttons
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  startButton: {
-    backgroundColor: '#28a745',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 6,
-    flex: 1,
-    marginLeft: 10,
-    alignItems: 'center',
+    gap: 10,
   },
   cancelButton: {
-    backgroundColor: '#ff4444',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 6,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  startButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#208AEF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    flex: 1,
     justifyContent: 'center',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  endButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   buttonText: {
     color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '700',
+    fontSize: 15,
   },
-  navHeader: {
+
+  // Navigation bar
+  navBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 8,
+    borderRadius: 16,
+    padding: 14,
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 6,
+    gap: 12,
   },
-  navHeaderLeft: {
+  navLeft: {
     flex: 1,
+    gap: 4,
   },
-  navText: {
+  navTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-  },
-  navSubText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
-    marginTop: 2,
+    fontWeight: '700',
+    color: '#111',
   },
 });

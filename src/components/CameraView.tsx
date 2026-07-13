@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor, runAtTargetFps } from 'react-native-vision-camera';
+import { AlertTriangle } from 'lucide-react-native';
 import * as Speech from 'expo-speech';
 
 export default function CameraView() {
@@ -75,7 +76,8 @@ export default function CameraView() {
       {/* High Contrast UI for Hazard Alert */}
       {hazardDetected && (
         <View style={styles.hazardOverlay}>
-          <Text style={styles.hazardText}>⚠️ POTHOLE DETECTED</Text>
+          <AlertTriangle color="#fff" size={36} strokeWidth={3} />
+          <Text style={styles.hazardText}>POTHOLE DETECTED</Text>
         </View>
       )}
     </View>
