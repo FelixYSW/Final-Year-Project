@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
-import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor, runAtTargetFps } from 'react-native-vision-camera';
+import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
 import { AlertTriangle } from 'lucide-react-native';
 import * as Speech from 'expo-speech';
 
@@ -16,20 +16,11 @@ export default function CameraView() {
     }
   }, [hasPermission, requestPermission]);
 
-  // Dummy AI Frame Processor Simulation
-  // In a real implementation, this runs a TFLite model on every frame.
   const frameProcessor = useFrameProcessor((frame) => {
     'worklet';
-    // Run this logic only once per second (1 FPS) to save battery
-    runAtTargetFps(1, () => {
-      // Simulate a random 5% chance of finding a hazard on any given frame
-      const isHazard = Math.random() < 0.05;
-      
-      if (isHazard) {
-        // Trigger React State and Sound Cue (this must be run on JS thread)
-        console.log("Mock Hazard Detected: Pothole!");
-      }
-    });
+    // Dummy AI Frame Processor Simulation
+    // Removed runAtTargetFps because it is deprecated in Vision Camera v5.
+    // Use runOnJS(function) if you need to call back to the main thread in the future.
   }, []);
 
   // For the dummy implementation, we'll just use a standard JS interval to simulate 
