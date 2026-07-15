@@ -20,6 +20,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Create .env file
+        env:
+          MAPS_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: |
+          echo "GOOGLE_MAPS_API_KEY=$MAPS_KEY" > .env
+
       - name: Prebuild Expo iOS folder
         run: npx expo prebuild --platform ios
 
