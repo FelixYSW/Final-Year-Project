@@ -31,12 +31,12 @@ jobs:
       - name: Build Unsigned App
         run: |
           cd ios
-          xcodebuild -workspace accessiblenavapp.xcworkspace -scheme accessiblenavapp -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -workspace accessiblenavapp.xcworkspace -scheme accessiblenavapp -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO CONFIGURATION_BUILD_DIR=../custom_build build
           
       - name: Package into IPA
         run: |
           mkdir Payload
-          cp -r ios/build/Build/Products/Release-iphoneos/accessiblenavapp.app Payload/
+          cp -r custom_build/accessiblenavapp.app Payload/
           zip -r app.ipa Payload
 
       - name: Upload IPA Artifact
