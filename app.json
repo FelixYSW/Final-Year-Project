@@ -49,13 +49,6 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow this app to use your location for routing."
         }
-      ],
-      [
-        "react-native-vision-camera",
-        {
-          "cameraPermissionText": "This app requires camera access to detect hazards and provide AR navigation.",
-          "enableMicrophonePermission": false
-        }
       ]
     ],
     "experiments": {
