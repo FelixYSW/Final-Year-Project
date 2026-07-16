@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
-import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
+import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import { AlertTriangle } from 'lucide-react-native';
 import * as Speech from 'expo-speech';
 
 export default function CameraView() {
   const device = useCameraDevice('back');
   const { hasPermission, requestPermission } = useCameraPermission();
-  const [isActive, setIsActive] = useState(true);
+  const [isActive] = useState(true);
   const [hazardDetected, setHazardDetected] = useState(false);
 
   useEffect(() => {
@@ -16,23 +16,14 @@ export default function CameraView() {
     }
   }, [hasPermission, requestPermission]);
 
-  const frameProcessor = useFrameProcessor((frame) => {
-    'worklet';
-    // Dummy AI Frame Processor Simulation
-    // Removed runAtTargetFps because it is deprecated in Vision Camera v5.
-    // Use runOnJS(function) if you need to call back to the main thread in the future.
-  }, []);
-
-  // For the dummy implementation, we'll just use a standard JS interval to simulate 
-  // hazard audio cues so you can test it on your device without needing the full Worklet setup.
+  // Simulate hazard detection every 15 seconds (placeholder until real AI model is added)
   useEffect(() => {
     if (isActive && hasPermission) {
       const interval = setInterval(() => {
         setHazardDetected(true);
         Speech.speak('Warning. Pothole detected ahead.');
-        
         setTimeout(() => setHazardDetected(false), 3000);
-      }, 15000); // Simulate finding a hazard every 15 seconds
+      }, 15000);
 
       return () => clearInterval(interval);
     }
@@ -60,10 +51,9 @@ export default function CameraView() {
         style={StyleSheet.absoluteFill}
         device={device}
         isActive={isActive}
-        video={true}
-        // frameProcessor={frameProcessor} // Disabled temporarily until real model is ready
+        video={false}
       />
-      
+
       {/* High Contrast UI for Hazard Alert */}
       {hazardDetected && (
         <View style={styles.hazardOverlay}>
