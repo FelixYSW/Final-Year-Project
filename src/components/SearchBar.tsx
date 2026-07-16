@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
 import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
-import { Search, X } from 'lucide-react-native';
+import { Search, X, MapPin } from 'lucide-react-native';
+import { SearchBarStyles as styles } from '@/constants/theme';
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || '';
 
@@ -58,61 +59,3 @@ export default function SearchBar({ onPlaceSelected }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  iconContainer: {
-    paddingTop: 14,
-    paddingLeft: 14,
-    paddingRight: 4,
-  },
-  textInputContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    borderTopWidth: 0,
-    borderBottomWidth: 0,
-  },
-  textInput: {
-    height: 50,
-    fontSize: 17,
-    color: '#111',
-    backgroundColor: 'transparent',
-    fontWeight: '500',
-  },
-  listView: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginTop: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  row: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  description: {
-    fontSize: 15,
-    color: '#111',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-  },
-  clearButton: {
-    paddingTop: 14,
-    paddingRight: 14,
-    paddingLeft: 4,
-  },
-});
