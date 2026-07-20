@@ -7,20 +7,12 @@ const GOOGLE_MAPS_API_KEY =
   '';
 
 interface Props {
+  currentCoords?: { lat: number; lng: number } | null;
   destCoords?: { lat: number; lng: number } | null;
 }
 
-export default function MacroMapView({ destCoords }: Props) {
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-
-  useEffect(() => {
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setCoords({ lat: 3.139, lng: 101.6869 }) // fallback to KL
-    );
-  }, []);
-
-  if (!coords) {
+export default function MacroMapView({ currentCoords, destCoords }: Props) {
+  if (!currentCoords) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#208AEF" />
@@ -30,14 +22,23 @@ export default function MacroMapView({ destCoords }: Props) {
   }
 
   const mapSrc = destCoords
-    ? `https://www.google.com/maps/embed/v1/directions?key=${GOOGLE_MAPS_API_KEY}&origin=${coords.lat},${coords.lng}&destination=${destCoords.lat},${destCoords.lng}&mode=walking`
-    : `https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_API_KEY}&center=${coords.lat},${coords.lng}&zoom=17&maptype=roadmap`;
+    ? `https://www.google.com/maps/embed/v1/directions?key=${GOOGLE_MAPS_API_KEY}&origin=${currentCoords.lat},${currentCoords.lng}&destination=${destCoords.lat},${destCoords.lng}&mode=walking`
+    : `https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_API_KEY}&center=${currentCoords.lat},${currentCoords.lng}&zoom=17&maptype=roadmap`;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { overflow: 'hidden' }]}>
       {React.createElement('iframe', {
         src: mapSrc,
-        style: { width: '100%', height: '100%', border: 'none' },
+        style: {
+          width: '100%',
+          // Clip top bar (~105px: origin/destination inputs + More options) and
+          // bottom bar (~70px: satellite btn, zoom, keyboard shortcuts, terms/logo).
+          // Total extra = 175px. Shift up by 105px so top is clipped, bottom -70px also clipped.
+          height: 'calc(100% + 175px)',
+          marginTop: -105,
+          border: 'none',
+          display: 'block',
+        },
         allowFullScreen: true,
         loading: 'lazy',
       })}

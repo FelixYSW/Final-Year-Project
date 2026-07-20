@@ -7,21 +7,27 @@ import {
   ActivityIndicator,
   StyleSheet,
   Platform,
-  FlatList,
   Keyboard,
 } from 'react-native';
-import { Search, MapPin, X } from 'lucide-react-native';
+import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Search, MapPin, Clock, X } from 'lucide-react-native';
 
 interface Props {
-  onPlaceSelected: (name: string, lat: number, lng: number) => void;
+  onPlaceSelected: (name: string, lat: number, lng: number, address: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 interface Suggestion {
   placeId: string;
   description: string;
+  mainText: string;
+  secondaryText: string;
+  isHistory?: boolean;
 }
 
-export default function SearchBar({ onPlaceSelected }: Props) {
+export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
   const [input, setInput] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,8 +49,19 @@ export default function SearchBar({ onPlaceSelected }: Props) {
   };
 
   const fetchSuggestions = async (text: string) => {
-    if (!text || text.length < 2) {
-      setSuggestions([]);
+    if (!text) {
+      // Load recent history from AsyncStorage
+      try {
+        const storedHistory = await AsyncStorage.getItem('@search_history');
+        if (storedHistory) {
+          const history = JSON.parse(storedHistory);
+          setSuggestions(history);
+        } else {
+          setSuggestions([]);
+        }
+      } catch (e) {
+        setSuggestions([]);
+      }
       return;
     }
     
@@ -78,6 +95,8 @@ export default function SearchBar({ onPlaceSelected }: Props) {
         const results: Suggestion[] = (json.suggestions || []).map((s: any) => ({
           placeId: s.placePrediction?.placeId || '',
           description: s.placePrediction?.text?.text || '',
+          mainText: s.placePrediction?.structuredFormat?.mainText?.text || s.placePrediction?.text?.text || '',
+          secondaryText: s.placePrediction?.structuredFormat?.secondaryText?.text || '',
         })).filter((s: Suggestion) => s.placeId);
         
         setSuggestions(results);
@@ -89,6 +108,8 @@ export default function SearchBar({ onPlaceSelected }: Props) {
         const results: Suggestion[] = (data.predictions || []).map((s: any) => ({
           placeId: s.place_id,
           description: s.description,
+          mainText: s.structured_formatting?.main_text || s.description,
+          secondaryText: s.structured_formatting?.secondary_text || '',
         }));
         setSuggestions(results);
       }
@@ -108,6 +129,11 @@ export default function SearchBar({ onPlaceSelected }: Props) {
       fetchSuggestions(text);
     }, 300);
   };
+
+  // Fetch default suggestions on mount
+  useEffect(() => {
+    fetchSuggestions('');
+  }, []);
 
   const handleSelect = async (suggestion: Suggestion) => {
     Keyboard.dismiss();
@@ -130,7 +156,7 @@ export default function SearchBar({ onPlaceSelected }: Props) {
         if (json.location) {
           const lat = json.location.latitude;
           const lng = json.location.longitude;
-          onPlaceSelected(suggestion.description, lat, lng);
+          onPlaceSelected(suggestion.mainText, lat, lng, suggestion.secondaryText);
         }
       } else {
         const response = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${suggestion.placeId}&fields=geometry&key=${GOOGLE_MAPS_API_KEY}`);
@@ -138,9 +164,31 @@ export default function SearchBar({ onPlaceSelected }: Props) {
 
         if (data.result?.geometry?.location) {
           const { lat, lng } = data.result.geometry.location;
-          onPlaceSelected(suggestion.description, lat, lng);
+          onPlaceSelected(suggestion.mainText, lat, lng, suggestion.secondaryText);
         }
       }
+      
+      // Save to recent history
+      try {
+        const historyObj: Suggestion = {
+          ...suggestion,
+          isHistory: true,
+        };
+        const storedHistory = await AsyncStorage.getItem('@search_history');
+        let history: Suggestion[] = storedHistory ? JSON.parse(storedHistory) : [];
+        
+        // Remove duplicate if exists
+        history = history.filter((s) => s.placeId !== suggestion.placeId);
+        
+        // Add to front and keep top 10
+        history.unshift(historyObj);
+        if (history.length > 10) history = history.slice(0, 10);
+        
+        await AsyncStorage.setItem('@search_history', JSON.stringify(history));
+      } catch (e) {
+        console.error('Error saving history:', e);
+      }
+      
     } catch (error) {
       console.error('Error fetching details:', error);
     } finally {
@@ -160,7 +208,13 @@ export default function SearchBar({ onPlaceSelected }: Props) {
           placeholderTextColor="#999"
           value={input}
           onChangeText={handleInputChange}
-          onFocus={() => setShowDropdown(true)}
+          onFocus={() => {
+            setShowDropdown(true);
+            onFocus?.();
+          }}
+          onBlur={() => {
+            onBlur?.();
+          }}
           autoCorrect={false}
         />
         {loading && <ActivityIndicator style={styles.loader} size="small" color="#208AEF" />}
@@ -177,9 +231,9 @@ export default function SearchBar({ onPlaceSelected }: Props) {
         )}
       </View>
 
-      {showDropdown && suggestions.length > 0 && (
+      {suggestions.length > 0 && (
         <View style={styles.dropdown}>
-          <FlatList
+          <BottomSheetFlatList
             data={suggestions}
             keyExtractor={(item) => item.placeId}
             keyboardShouldPersistTaps="handled"
@@ -188,10 +242,23 @@ export default function SearchBar({ onPlaceSelected }: Props) {
                 style={styles.suggestionRow}
                 onPress={() => handleSelect(item)}
               >
-                <MapPin color="#666" size={18} style={styles.pinIcon} />
-                <Text style={styles.suggestionText} numberOfLines={2}>
-                  {item.description}
-                </Text>
+                <View style={styles.pinContainer}>
+                  {item.isHistory ? (
+                    <Clock color="#000" size={22} />
+                  ) : (
+                    <MapPin color="#000" size={24} />
+                  )}
+                </View>
+                <View style={styles.textContainer}>
+                  <Text style={styles.mainText} numberOfLines={1}>
+                    {item.mainText}
+                  </Text>
+                  {item.secondaryText ? (
+                    <Text style={styles.secondaryText} numberOfLines={1}>
+                      {item.secondaryText}
+                    </Text>
+                  ) : null}
+                </View>
               </TouchableOpacity>
             )}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -204,6 +271,7 @@ export default function SearchBar({ onPlaceSelected }: Props) {
 
 const styles = StyleSheet.create({
   wrapper: {
+    flex: 1,
     zIndex: 100,
   },
   container: {
@@ -242,36 +310,41 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   dropdown: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginTop: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 8,
-    maxHeight: 260,
-    overflow: 'hidden',
+    flex: 1,
+    marginTop: 12,
   },
   suggestionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 16,
   },
-  pinIcon: {
-    marginRight: 4,
+  pinContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  suggestionText: {
-    fontSize: 14,
-    color: '#111',
+  textContainer: {
     flex: 1,
-    lineHeight: 20,
+    justifyContent: 'center',
+  },
+  mainText: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  secondaryText: {
+    fontSize: 14,
+    color: '#6b7280',
   },
   separator: {
     height: 1,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 14,
+    backgroundColor: '#f3f4f6',
+    marginLeft: 72,
   },
 });

@@ -1,38 +1,35 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
-import { StyleSheet } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 
 interface Props {
+  currentCoords?: { lat: number; lng: number } | null;
   destCoords?: { lat: number; lng: number } | null;
+  routeCoords?: { latitude: number; longitude: number }[];
 }
 
-export default function MacroMapView({ destCoords }: Props) {
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+export default function MacroMapView({ currentCoords, destCoords, routeCoords }: Props) {
+  const mapRef = useRef<MapView>(null);
 
+  // Auto-fit the map to show all route points whenever the route changes
   useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Location permission denied. Please enable it in Settings.');
-        return;
-      }
-      let currentLocation = await Location.getCurrentPositionAsync({});
-      setLocation(currentLocation);
-    })();
-  }, []);
+    if (mapRef.current && routeCoords && routeCoords.length > 1) {
+      mapRef.current.fitToCoordinates(routeCoords, {
+        edgePadding: { top: 60, right: 40, bottom: 60, left: 40 },
+        animated: true,
+      });
+    } else if (mapRef.current && currentCoords && destCoords) {
+      mapRef.current.fitToCoordinates(
+        [
+          { latitude: currentCoords.lat, longitude: currentCoords.lng },
+          { latitude: destCoords.lat, longitude: destCoords.lng },
+        ],
+        { edgePadding: { top: 80, right: 40, bottom: 80, left: 40 }, animated: true }
+      );
+    }
+  }, [routeCoords, destCoords]);
 
-  if (errorMsg) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{errorMsg}</Text>
-      </View>
-    );
-  }
-
-  if (!location) {
+  if (!currentCoords) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#208AEF" />
@@ -44,23 +41,35 @@ export default function MacroMapView({ destCoords }: Props) {
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={{
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: destCoords ? 0.05 : 0.01,
-          longitudeDelta: destCoords ? 0.05 : 0.01,
+          latitude: currentCoords.lat,
+          longitude: currentCoords.lng,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
         }}
         showsUserLocation={true}
-        followsUserLocation={!destCoords}
-        showsCompass={true}
-        showsMyLocationButton={true}
+        showsCompass={false}
+        showsMyLocationButton={false}
+        showsScale={false}
+        showsPointsOfInterest={true}
+        toolbarEnabled={false}
+        zoomControlEnabled={false}
+        mapType="standard"
       >
         {destCoords && (
           <Marker
             coordinate={{ latitude: destCoords.lat, longitude: destCoords.lng }}
             title="Destination"
             pinColor="#208AEF"
+          />
+        )}
+        {routeCoords && routeCoords.length > 1 && (
+          <Polyline
+            coordinates={routeCoords}
+            strokeColor="#1a73e8"
+            strokeWidth={5}
           />
         )}
       </MapView>
@@ -77,13 +86,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     gap: 12,
   },
-  errorText: {
-    color: '#ff4444',
-    fontSize: 16,
-    textAlign: 'center',
-    paddingHorizontal: 24,
-    fontWeight: '600',
-  },
   loadingText: {
     color: '#555',
     fontSize: 15,
@@ -93,3 +95,5 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 });
+
+

@@ -1,10 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text } from 'react-native';
-import { AlertTriangle, Camera, CameraOff } from 'lucide-react-native';
+import { AlertTriangle, Camera, CameraOff, CornerUpLeft, ArrowUp } from 'lucide-react-native';
 import * as Speech from 'expo-speech';
 import { StyleSheet } from 'react-native';
 
-export default function CameraView() {
+interface Props {
+  isNavigating?: boolean;
+  destination?: string;
+}
+
+export default function CameraView({ isNavigating, destination }: Props) {
   const videoRef = useRef<any>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [hazardDetected, setHazardDetected] = useState(false);
@@ -74,6 +79,20 @@ export default function CameraView() {
           <Text style={styles.hazardText}>POTHOLE DETECTED</Text>
         </View>
       )}
+      {isNavigating && (
+        <View style={styles.arOverlay}>
+          <View style={styles.directionCard}>
+            <CornerUpLeft color="#fff" size={42} strokeWidth={2.5} />
+            <View style={styles.directionTextContainer}>
+              <Text style={styles.distanceText}>150 m</Text>
+              <Text style={styles.instructionText}>Turn left towards {destination || 'Destination'}</Text>
+            </View>
+          </View>
+          <View style={styles.arPathWrapper}>
+            <ArrowUp color="rgba(32, 138, 239, 0.8)" size={140} strokeWidth={3} />
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -116,5 +135,48 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '900',
     textAlign: 'center',
+  },
+  arOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    pointerEvents: 'none',
+  },
+  directionCard: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    padding: 16,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  directionTextContainer: {
+    flex: 1,
+  },
+  distanceText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  instructionText: {
+    color: '#ddd',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  arPathWrapper: {
+    position: 'absolute',
+    bottom: '25%',
+    alignSelf: 'center',
+    transform: [{ perspective: 500 }, { rotateX: '60deg' }],
   },
 });
