@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { MapViewStyles as styles } from '@/constants/theme';
+import { StyleSheet } from 'react-native';
 
 interface Props {
   destCoords?: { lat: number; lng: number } | null;
@@ -67,3 +67,29 @@ export default function MacroMapView({ destCoords }: Props) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    gap: 12,
+  },
+  errorText: {
+    color: '#ff4444',
+    fontSize: 16,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    fontWeight: '600',
+  },
+  loadingText: {
+    color: '#555',
+    fontSize: 15,
+  },
+  map: {
+    width: '100%',
+    height: '100%',
+  },
+});

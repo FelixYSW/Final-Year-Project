@@ -3,7 +3,7 @@ import { View, Text } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import { AlertTriangle, Camera as CameraIcon, CameraOff } from 'lucide-react-native';
 import * as Speech from 'expo-speech';
-import { CameraViewStyles as styles } from '@/constants/theme';
+import { StyleSheet } from 'react-native';
 
 export default function CameraView() {
   const device = useCameraDevice('back');
@@ -61,3 +61,37 @@ export default function CameraView() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  hazardOverlay: {
+    position: 'absolute',
+    top: '40%',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255, 0, 0, 0.9)',
+    padding: 15,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    gap: 8,
+  },
+  hazardText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+});

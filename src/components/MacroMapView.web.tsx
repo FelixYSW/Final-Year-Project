@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
-import { MapViewStyles as styles } from '@/constants/theme';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 
 const GOOGLE_MAPS_API_KEY =
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ||
@@ -45,3 +44,18 @@ export default function MacroMapView({ destCoords }: Props) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    gap: 12,
+  },
+  loadingText: {
+    color: '#555',
+    fontSize: 15,
+  },
+});

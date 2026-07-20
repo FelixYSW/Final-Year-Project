@@ -1,3 +1,4 @@
+import '../global.css';
 import { Stack } from 'expo-router';
 import React from 'react';
 import { View, Text, Button, SafeAreaView, StyleSheet } from 'react-native';

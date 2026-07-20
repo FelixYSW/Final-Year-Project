@@ -30,7 +30,6 @@
       "package": "com.anonymous.accessiblenavapp"
     },
     "web": {
-      "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
