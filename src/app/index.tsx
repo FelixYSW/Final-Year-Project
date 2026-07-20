@@ -69,9 +69,9 @@ export default function App() {
 
   const snapPoints = useMemo(() => {
     // Keep array lengths identical to prevent BottomSheet index bugs on Web
-    if (appState === 'default') return ['12%', '60%'];
-    if (appState === 'preview') return ['28%', '28%'];
-    if (appState === 'navigating') return ['17%', '17%'];
+    if (appState === 'default') return ['15%', '63%'];
+    if (appState === 'preview') return ['31%', '31%'];
+    if (appState === 'navigating') return ['20%', '20%'];
     return ['15%', '15%'];
   }, [appState]);
 

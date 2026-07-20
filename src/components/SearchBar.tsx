@@ -36,18 +36,6 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
   // Use a ref to debounce
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const getApiBaseUrl = () => {
-    // In development Expo Router, API routes are available at the dev server root
-    // For Native apps, we must provide the absolute URL of the Metro server
-    if (Platform.OS === 'web') return '';
-    
-    // Attempt to get the manifest host if available (only works in Expo Go usually)
-    // As a fallback for physical devices in dev, you might need your local IP, e.g., 'http://192.168.x.x:8081'
-    // But since API routes run on the Metro server, we can use process.env.EXPO_PUBLIC_API_URL or similar.
-    // For simplicity, we'll try to use the proxy directly if we are on Native, wait, if we are on Native, we don't NEED the proxy!
-    return 'NATIVE'; 
-  };
-
   const fetchSuggestions = async (text: string) => {
     if (!text) {
       // Load recent history from AsyncStorage
@@ -68,51 +56,38 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
     setLoading(true);
     
     try {
-      let data;
       const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
       
-      if (Platform.OS === 'web') {
-        // Web uses New Places API to avoid CORS issues
-        const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-          },
-          body: JSON.stringify({
-            input: text,
-            includedRegionCodes: ['my'], // Restrict to Malaysia
-          }),
-        });
-        
-        const json = await response.json();
-        
-        if (json.error) {
-          console.error('Places API Error:', json.error.message);
-          return;
-        }
-        
-        const results: Suggestion[] = (json.suggestions || []).map((s: any) => ({
-          placeId: s.placePrediction?.placeId || '',
-          description: s.placePrediction?.text?.text || '',
-          mainText: s.placePrediction?.structuredFormat?.mainText?.text || s.placePrediction?.text?.text || '',
-          secondaryText: s.placePrediction?.structuredFormat?.secondaryText?.text || '',
-        })).filter((s: Suggestion) => s.placeId);
-        
-        setSuggestions(results);
-      } else {
-        // Native uses Old Places API
-        const response = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&components=country:my&key=${GOOGLE_MAPS_API_KEY}`);
-        data = await response.json();
-        
-        const results: Suggestion[] = (data.predictions || []).map((s: any) => ({
-          placeId: s.place_id,
-          description: s.description,
-          mainText: s.structured_formatting?.main_text || s.description,
-          secondaryText: s.structured_formatting?.secondary_text || '',
-        }));
-        setSuggestions(results);
+      // Use the new Places API for both web and native
+      // (native has no CORS restriction so this works on both platforms)
+      const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        },
+        body: JSON.stringify({
+          input: text,
+          includedRegionCodes: ['my'], // Restrict to Malaysia
+        }),
+      });
+      
+      const json = await response.json();
+      
+      if (json.error) {
+        console.error('Places API Error:', json.error.message);
+        setSuggestions([]);
+        return;
       }
+      
+      const results: Suggestion[] = (json.suggestions || []).map((s: any) => ({
+        placeId: s.placePrediction?.placeId || '',
+        description: s.placePrediction?.text?.text || '',
+        mainText: s.placePrediction?.structuredFormat?.mainText?.text || s.placePrediction?.text?.text || '',
+        secondaryText: s.placePrediction?.structuredFormat?.secondaryText?.text || '',
+      })).filter((s: Suggestion) => s.placeId);
+      
+      setSuggestions(results);
     } catch (error) {
       console.error('Error fetching places:', error);
     } finally {
@@ -144,28 +119,19 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
     try {
       const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
       
-      if (Platform.OS === 'web') {
-        const response = await fetch(`https://places.googleapis.com/v1/places/${suggestion.placeId}?fields=location`, {
-          headers: {
-            'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-            'X-Goog-FieldMask': 'location',
-          },
-        });
-        const json = await response.json();
-        
-        if (json.location) {
-          const lat = json.location.latitude;
-          const lng = json.location.longitude;
-          onPlaceSelected(suggestion.mainText, lat, lng, suggestion.secondaryText);
-        }
-      } else {
-        const response = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${suggestion.placeId}&fields=geometry&key=${GOOGLE_MAPS_API_KEY}`);
-        const data = await response.json();
-
-        if (data.result?.geometry?.location) {
-          const { lat, lng } = data.result.geometry.location;
-          onPlaceSelected(suggestion.mainText, lat, lng, suggestion.secondaryText);
-        }
+      // Use the new Places API for both web and native
+      const response = await fetch(`https://places.googleapis.com/v1/places/${suggestion.placeId}?fields=location`, {
+        headers: {
+          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+          'X-Goog-FieldMask': 'location',
+        },
+      });
+      const json = await response.json();
+      
+      if (json.location) {
+        const lat = json.location.latitude;
+        const lng = json.location.longitude;
+        onPlaceSelected(suggestion.mainText, lat, lng, suggestion.secondaryText);
       }
       
       // Save to recent history
