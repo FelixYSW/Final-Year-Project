@@ -8,10 +8,17 @@ import {
   StyleSheet,
   Platform,
   Keyboard,
+  ScrollView,
 } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Search, MapPin, Clock, X } from 'lucide-react-native';
+
+// Fallback: key is also hardcoded here so native builds that didn't
+// embed the .env at compile time still have a working key.
+const API_KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ||
+  'AIzaSyAoED8D5-lIso3YhWdnacc-qihZC_eUPfk';
 
 interface Props {
   onPlaceSelected: (name: string, lat: number, lng: number, address: string) => void;
@@ -31,12 +38,13 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
   const [input, setInput] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [apiError, setApiError] = useState('');
   
   // Use a ref to debounce
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchSuggestions = async (text: string) => {
+    setApiError('');
     if (!text) {
       // Load recent history from AsyncStorage
       try {
@@ -54,42 +62,35 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
     }
     
     setLoading(true);
-    
     try {
-      const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-      
-      // Use the new Places API for both web and native
-      // (native has no CORS restriction so this works on both platforms)
+      // Use the new Places API for both web and native.
+      // API_KEY has a hardcoded fallback so native builds without embedded env vars still work.
       const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+          'X-Goog-Api-Key': API_KEY,
         },
         body: JSON.stringify({
           input: text,
-          includedRegionCodes: ['my'], // Restrict to Malaysia
+          includedRegionCodes: ['my'],
         }),
       });
-      
       const json = await response.json();
-      
       if (json.error) {
-        console.error('Places API Error:', json.error.message);
+        setApiError(`API error: ${json.error.message}`);
         setSuggestions([]);
         return;
       }
-      
       const results: Suggestion[] = (json.suggestions || []).map((s: any) => ({
         placeId: s.placePrediction?.placeId || '',
         description: s.placePrediction?.text?.text || '',
         mainText: s.placePrediction?.structuredFormat?.mainText?.text || s.placePrediction?.text?.text || '',
         secondaryText: s.placePrediction?.structuredFormat?.secondaryText?.text || '',
       })).filter((s: Suggestion) => s.placeId);
-      
       setSuggestions(results);
-    } catch (error) {
-      console.error('Error fetching places:', error);
+    } catch (error: any) {
+      setApiError(`Network error: ${error?.message}`);
     } finally {
       setLoading(false);
     }
@@ -97,8 +98,6 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
 
   const handleInputChange = (text: string) => {
     setInput(text);
-    setShowDropdown(true);
-    
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       fetchSuggestions(text);
@@ -112,26 +111,18 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
 
   const handleSelect = async (suggestion: Suggestion) => {
     Keyboard.dismiss();
-    setShowDropdown(false);
-    setInput(suggestion.description);
+    setInput(suggestion.mainText);
     setLoading(true);
-
     try {
-      const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-      
-      // Use the new Places API for both web and native
       const response = await fetch(`https://places.googleapis.com/v1/places/${suggestion.placeId}?fields=location`, {
         headers: {
-          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+          'X-Goog-Api-Key': API_KEY,
           'X-Goog-FieldMask': 'location',
         },
       });
       const json = await response.json();
-      
       if (json.location) {
-        const lat = json.location.latitude;
-        const lng = json.location.longitude;
-        onPlaceSelected(suggestion.mainText, lat, lng, suggestion.secondaryText);
+        onPlaceSelected(suggestion.mainText, json.location.latitude, json.location.longitude, suggestion.secondaryText);
       }
       
       // Save to recent history
@@ -175,21 +166,16 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
           value={input}
           onChangeText={handleInputChange}
           onFocus={() => {
-            setShowDropdown(true);
+            fetchSuggestions(input);
             onFocus?.();
           }}
-          onBlur={() => {
-            onBlur?.();
-          }}
+          onBlur={() => onBlur?.()}
           autoCorrect={false}
         />
         {loading && <ActivityIndicator style={styles.loader} size="small" color="#208AEF" />}
         {input.length > 0 && (
-          <TouchableOpacity 
-            onPress={() => {
-              setInput('');
-              setSuggestions([]);
-            }} 
+          <TouchableOpacity
+            onPress={() => { setInput(''); fetchSuggestions(''); }}
             style={styles.clearButton}
           >
             <X color="#999" size={18} />
@@ -197,13 +183,19 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
         )}
       </View>
 
+      {/* Visible API error for debugging */}
+      {!!apiError && (
+        <Text style={styles.errorText}>{apiError}</Text>
+      )}
+
       {suggestions.length > 0 && (
-        <View style={styles.dropdown}>
-          <BottomSheetFlatList
-            data={suggestions}
-            keyExtractor={(item) => item.placeId}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
+        <ScrollView
+          style={styles.dropdown}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {suggestions.map((item, index) => (
+            <View key={item.placeId}>
               <TouchableOpacity
                 style={styles.suggestionRow}
                 onPress={() => handleSelect(item)}
@@ -216,20 +208,16 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
                   )}
                 </View>
                 <View style={styles.textContainer}>
-                  <Text style={styles.mainText} numberOfLines={1}>
-                    {item.mainText}
-                  </Text>
+                  <Text style={styles.mainText} numberOfLines={1}>{item.mainText}</Text>
                   {item.secondaryText ? (
-                    <Text style={styles.secondaryText} numberOfLines={1}>
-                      {item.secondaryText}
-                    </Text>
+                    <Text style={styles.secondaryText} numberOfLines={1}>{item.secondaryText}</Text>
                   ) : null}
                 </View>
               </TouchableOpacity>
-            )}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-          />
-        </View>
+              {index < suggestions.length - 1 && <View style={styles.separator} />}
+            </View>
+          ))}
+        </ScrollView>
       )}
     </View>
   );
@@ -312,5 +300,11 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#f3f4f6',
     marginLeft: 72,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 13,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
 });
