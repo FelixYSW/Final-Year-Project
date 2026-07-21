@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
 interface Props {
   currentCoords?: { lat: number; lng: number } | null;
@@ -43,6 +43,7 @@ export default function MacroMapView({ currentCoords, destCoords, routeCoords }:
       <MapView
         ref={mapRef}
         style={styles.map}
+        provider={PROVIDER_GOOGLE}
         initialRegion={{
           latitude: currentCoords.lat,
           longitude: currentCoords.lng,

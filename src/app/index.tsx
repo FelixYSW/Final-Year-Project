@@ -69,10 +69,10 @@ export default function App() {
 
   const snapPoints = useMemo(() => {
     // Keep array lengths identical to prevent BottomSheet index bugs on Web
-    if (appState === 'default') return ['13%', '50%'];
+    if (appState === 'default') return ['11%', '50%'];
     if (appState === 'preview') return ['21%', '21%'];
-    if (appState === 'navigating') return ['22%', '20%'];
-    return ['20%', '20%'];
+    if (appState === 'navigating') return ['21%', '21%'];
+    return ['21%', '21%'];
   }, [appState]);
 
   const handlePlaceSelected = async (placeName: string, lat: number, lng: number, address: string = '') => {

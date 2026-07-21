@@ -193,6 +193,7 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
           style={styles.dropdown}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          scrollEnabled={false}
         >
           {suggestions.map((item, index) => (
             <View key={item.placeId}>
