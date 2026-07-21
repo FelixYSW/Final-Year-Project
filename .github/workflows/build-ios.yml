@@ -26,9 +26,13 @@ jobs:
           MAPS_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
           echo "GOOGLE_MAPS_API_KEY=$MAPS_KEY" > .env
+          echo "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=$MAPS_KEY" >> .env
 
       - name: Prebuild Expo iOS folder
-        run: npx expo prebuild --platform ios
+        env:
+          EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: npx expo prebuild --platform ios --clean
 
       - name: Cache CocoaPods
         uses: actions/cache@v4

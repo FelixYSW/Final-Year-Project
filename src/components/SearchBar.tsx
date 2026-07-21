@@ -51,7 +51,7 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
         const storedHistory = await AsyncStorage.getItem('@search_history');
         if (storedHistory) {
           const history = JSON.parse(storedHistory);
-          setSuggestions(history);
+          setSuggestions(history.slice(0, 5));
         } else {
           setSuggestions([]);
         }
@@ -137,13 +137,13 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
         // Remove duplicate if exists
         history = history.filter((s) => s.placeId !== suggestion.placeId);
         
-        // Add to front and keep top 10
+        // Add to front and keep top 5
         history.unshift(historyObj);
-        if (history.length > 10) history = history.slice(0, 10);
+        if (history.length > 5) history = history.slice(0, 5);
         
         await AsyncStorage.setItem('@search_history', JSON.stringify(history));
       } catch (e) {
-        console.error('Error saving history:', e);
+        console.error('Failed to save search history', e);
       }
       
     } catch (error) {
@@ -165,6 +165,9 @@ export default function SearchBar({ onPlaceSelected, onFocus, onBlur }: Props) {
           placeholderTextColor="#999"
           value={input}
           onChangeText={handleInputChange}
+          onSubmitEditing={() => {
+            Keyboard.dismiss();
+          }}
           onFocus={() => {
             fetchSuggestions(input);
             onFocus?.();
