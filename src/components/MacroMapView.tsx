@@ -1,33 +1,51 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import type { Route } from '@/app/index';
 
 interface Props {
   currentCoords?: { lat: number; lng: number } | null;
   destCoords?: { lat: number; lng: number } | null;
-  routeCoords?: { latitude: number; longitude: number }[];
+  allRoutes?: Route[];
+  selectedRouteIndex?: number;
+  onRouteSelect?: (index: number) => void;
 }
 
-export default function MacroMapView({ currentCoords, destCoords, routeCoords }: Props) {
+// Colours for each route state
+const SELECTED_COLOR = '#1a73e8';   // Google blue
+const ALT_COLOR = '#9DB9E8';        // Muted blue-grey for alternatives
+
+export default function MacroMapView({
+  currentCoords,
+  destCoords,
+  allRoutes = [],
+  selectedRouteIndex = 0,
+  onRouteSelect,
+}: Props) {
   const mapRef = useRef<MapView>(null);
 
-  // Auto-fit the map to show all route points whenever the route changes
+  // Auto-fit whenever the selected route or destination changes
   useEffect(() => {
-    if (mapRef.current && routeCoords && routeCoords.length > 1) {
-      mapRef.current.fitToCoordinates(routeCoords, {
-        edgePadding: { top: 60, right: 40, bottom: 60, left: 40 },
+    const selected = allRoutes[selectedRouteIndex];
+    if (!mapRef.current) return;
+
+    if (selected && selected.coords.length > 1) {
+      // Fit to the selected route's points
+      mapRef.current.fitToCoordinates(selected.coords, {
+        edgePadding: { top: 80, right: 50, bottom: 80, left: 50 },
         animated: true,
       });
-    } else if (mapRef.current && currentCoords && destCoords) {
+    } else if (currentCoords && destCoords) {
+      // Fallback: fit origin → destination
       mapRef.current.fitToCoordinates(
         [
           { latitude: currentCoords.lat, longitude: currentCoords.lng },
           { latitude: destCoords.lat, longitude: destCoords.lng },
         ],
-        { edgePadding: { top: 80, right: 40, bottom: 80, left: 40 }, animated: true }
+        { edgePadding: { top: 80, right: 50, bottom: 80, left: 50 }, animated: true }
       );
     }
-  }, [routeCoords, destCoords]);
+  }, [allRoutes, selectedRouteIndex, destCoords]);
 
   if (!currentCoords) {
     return (
@@ -59,18 +77,38 @@ export default function MacroMapView({ currentCoords, destCoords, routeCoords }:
         zoomControlEnabled={false}
         mapType="standard"
       >
+        {/* Draw alternative routes first (underneath selected) */}
+        {allRoutes.map((route, index) => {
+          if (index === selectedRouteIndex) return null; // drawn last (on top)
+          return (
+            <Polyline
+              key={`alt-route-${index}`}
+              coordinates={route.coords}
+              strokeColor={ALT_COLOR}
+              strokeWidth={5}
+              tappable={true}
+              onPress={() => onRouteSelect?.(index)}
+            />
+          );
+        })}
+
+        {/* Draw selected route on top in blue */}
+        {allRoutes[selectedRouteIndex] && allRoutes[selectedRouteIndex].coords.length > 1 && (
+          <Polyline
+            key={`selected-route-${selectedRouteIndex}`}
+            coordinates={allRoutes[selectedRouteIndex].coords}
+            strokeColor={SELECTED_COLOR}
+            strokeWidth={6}
+            lineDashPattern={undefined}
+          />
+        )}
+
+        {/* Destination marker */}
         {destCoords && (
           <Marker
             coordinate={{ latitude: destCoords.lat, longitude: destCoords.lng }}
             title="Destination"
             pinColor="#208AEF"
-          />
-        )}
-        {routeCoords && routeCoords.length > 1 && (
-          <Polyline
-            coordinates={routeCoords}
-            strokeColor="#1a73e8"
-            strokeWidth={5}
           />
         )}
       </MapView>
@@ -96,5 +134,3 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 });
-
-

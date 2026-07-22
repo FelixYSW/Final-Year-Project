@@ -17,6 +17,12 @@ interface Coords {
   lng: number;
 }
 
+export interface Route {
+  coords: { latitude: number; longitude: number }[];
+  distance: string;
+  duration: string;
+}
+
 const GOOGLE_MAPS_API_KEY =
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ||
   process.env.GOOGLE_MAPS_API_KEY ||
@@ -26,16 +32,21 @@ export default function App() {
   const [appState, setAppState] = useState<AppState>('default');
   const [destination, setDestination] = useState('');
   const [destCoords, setDestCoords] = useState<Coords | null>(null);
-  const [distance, setDistance] = useState('');
-  const [duration, setDuration] = useState('');
   const [isFetchingRoute, setIsFetchingRoute] = useState(false);
   const [destAddress, setDestAddress] = useState('');
-  const [currentCoords, setCurrentCoords] = useState<{lat: number, lng: number} | null>(null);
-  const [routeCoords, setRouteCoords] = useState<{latitude: number, longitude: number}[]>([]);
+  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // All alternative routes returned by the Directions API
+  const [allRoutes, setAllRoutes] = useState<Route[]>([]);
+  // Index of the route the user has selected (default: 0 = recommended)
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+
+  // Convenience: the currently-selected route's metadata
+  const selectedRoute = allRoutes[selectedRouteIndex] ?? null;
 
   // Decode a Google Maps encoded polyline into lat/lng array
-  const decodePolyline = (encoded: string): {latitude: number, longitude: number}[] => {
-    const poly: {latitude: number, longitude: number}[] = [];
+  const decodePolyline = (encoded: string): { latitude: number; longitude: number }[] => {
+    const poly: { latitude: number; longitude: number }[] = [];
     let index = 0, lat = 0, lng = 0;
     while (index < encoded.length) {
       let b, shift = 0, result = 0;
@@ -80,14 +91,17 @@ export default function App() {
     setDestAddress(address);
     setDestCoords({ lat, lng });
     setIsFetchingRoute(true);
+    setAllRoutes([]);
+    setSelectedRouteIndex(0);
     setAppState('preview');
 
     try {
       const originLat = currentCoords ? currentCoords.lat : 3.1412;
       const originLng = currentCoords ? currentCoords.lng : 101.6865;
-      
-      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originLat},${originLng}&destination=${lat},${lng}&mode=walking&key=${GOOGLE_MAPS_API_KEY}`;
-      
+
+      // Request up to 3 alternative walking routes
+      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originLat},${originLng}&destination=${lat},${lng}&mode=walking&alternatives=true&key=${GOOGLE_MAPS_API_KEY}`;
+
       let data;
       if (Platform.OS === 'web') {
         // Web needs a CORS proxy
@@ -101,19 +115,18 @@ export default function App() {
       }
 
       if (data.routes && data.routes.length > 0) {
-        const leg = data.routes[0].legs[0];
-        setDistance(leg.distance.text);
-        setDuration(leg.duration.text);
-        // Decode the overview polyline to draw on native map
-        const points = decodePolyline(data.routes[0].overview_polyline.points);
-        setRouteCoords(points);
+        const parsed: Route[] = data.routes.map((r: any) => ({
+          coords: decodePolyline(r.overview_polyline.points),
+          distance: r.legs[0].distance.text,
+          duration: r.legs[0].duration.text,
+        }));
+        setAllRoutes(parsed);
+        setSelectedRouteIndex(0);
       } else {
-        setDistance('N/A');
-        setDuration('N/A');
+        setAllRoutes([]);
       }
     } catch {
-      setDistance('N/A');
-      setDuration('N/A');
+      setAllRoutes([]);
     } finally {
       setIsFetchingRoute(false);
     }
@@ -126,9 +139,8 @@ export default function App() {
     setDestination('');
     setDestAddress('');
     setDestCoords(null);
-    setRouteCoords([]);
-    setDistance('');
-    setDuration('');
+    setAllRoutes([]);
+    setSelectedRouteIndex(0);
   };
 
   return (
@@ -138,7 +150,13 @@ export default function App() {
         {appState === 'default' || appState === 'navigating' ? (
           <CameraView isNavigating={appState === 'navigating'} destination={destination} />
         ) : (
-          <MacroMapView currentCoords={currentCoords} destCoords={destCoords} routeCoords={routeCoords} />
+          <MacroMapView
+            currentCoords={currentCoords}
+            destCoords={destCoords}
+            allRoutes={allRoutes}
+            selectedRouteIndex={selectedRouteIndex}
+            onRouteSelect={setSelectedRouteIndex}
+          />
         )}
       </View>
 
@@ -154,8 +172,8 @@ export default function App() {
         <BottomSheetView style={{ flex: 1, paddingHorizontal: 16 }}>
           {/* DEFAULT MODE — Search bar */}
           {appState === 'default' && (
-            <SearchBar 
-              onPlaceSelected={handlePlaceSelected} 
+            <SearchBar
+              onPlaceSelected={handlePlaceSelected}
               onFocus={() => bottomSheetRef.current?.expand()}
               onBlur={() => bottomSheetRef.current?.collapse()}
             />
@@ -176,15 +194,24 @@ export default function App() {
               {isFetchingRoute ? (
                 <View className="flex-row items-center gap-2 py-4">
                   <ActivityIndicator color="#208AEF" size="small" />
-                  <Text className="text-gray-500">Calculating route...</Text>
+                  <Text className="text-gray-500">Calculating routes...</Text>
                 </View>
               ) : (
                 <View className="flex-row items-center gap-2 mt-2 mb-6">
                   <Badge variant="secondary" className="bg-blue-50">
                     <Footprints color="#208AEF" size={14} className="mr-1" />
-                    <Text className="text-blue-700 font-semibold text-base">{duration}</Text>
+                    <Text className="text-blue-700 font-semibold text-base">
+                      {selectedRoute?.duration ?? 'N/A'}
+                    </Text>
                   </Badge>
-                  <Text className="text-gray-600 font-medium text-base">•  {distance}</Text>
+                  <Text className="text-gray-600 font-medium text-base">
+                    •  {selectedRoute?.distance ?? 'N/A'}
+                  </Text>
+                  {allRoutes.length > 1 && (
+                    <Text className="text-gray-400 text-sm">
+                      (route {selectedRouteIndex + 1} of {allRoutes.length})
+                    </Text>
+                  )}
                 </View>
               )}
 
@@ -201,7 +228,7 @@ export default function App() {
                   variant="default"
                   size="default"
                   onPress={startNavigation}
-                  disabled={isFetchingRoute}
+                  disabled={isFetchingRoute || allRoutes.length === 0}
                   className="flex-1 rounded-full bg-[#208AEF]"
                 >
                   <Text className="text-white font-bold text-lg">Go now</Text>
@@ -218,11 +245,15 @@ export default function App() {
                   <Navigation color="#16a34a" size={24} />
                 </View>
                 <View>
-                  <Text className="text-2xl font-black text-green-600">{duration}</Text>
-                  <Text className="text-gray-500 font-medium">{distance} • {destination}</Text>
+                  <Text className="text-2xl font-black text-green-600">
+                    {selectedRoute?.duration ?? ''}
+                  </Text>
+                  <Text className="text-gray-500 font-medium">
+                    {selectedRoute?.distance ?? ''} • {destination}
+                  </Text>
                 </View>
               </View>
-              
+
               <Button
                 variant="outline"
                 size="sm"
