@@ -5,19 +5,56 @@
  * react-native-maps' own plugin only patches the ObjC AppDelegate,
  * not the Swift one that Expo SDK 50+ generates.
  *
- * This plugin patches AppDelegate.swift to call
- * GMSServices.provideAPIKey() before React Native starts, which is
- * required for PROVIDER_GOOGLE to render on iOS.
+ * Strategy:
+ *  1. Add `#import <GoogleMaps/GoogleMaps.h>` to the Objective-C
+ *     bridging header so GMSServices is visible to Swift without
+ *     needing `import GoogleMaps` (which fails — it's an ObjC framework).
+ *  2. Inject `GMSServices.provideAPIKey("…")` into AppDelegate.swift
+ *     as the first statement in didFinishLaunchingWithOptions.
  */
 
-const { withAppDelegate } = require('@expo/config-plugins');
+const { withAppDelegate, withDangerousMod } = require('@expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
 
-const withGoogleMapsInit = (config) => {
+// ── Step 1: patch the bridging header ────────────────────────────────────────
+const withGoogleMapsBridgingHeader = (config) => {
+  return withDangerousMod(config, [
+    'ios',
+    async (mod) => {
+      const projectRoot = mod.modRequest.projectRoot;
+      const platformRoot = mod.modRequest.platformProjectRoot; // …/ios
+
+      // Expo names the bridging header after the app slug
+      const slug = config.slug ?? 'accessiblenavapp';
+      const headerName = `${slug}-Bridging-Header.h`;
+      const headerPath = path.join(platformRoot, slug, headerName);
+
+      if (!fs.existsSync(headerPath)) {
+        console.warn(`[withGoogleMapsInit] Bridging header not found at ${headerPath}, skipping.`);
+        return mod;
+      }
+
+      let contents = fs.readFileSync(headerPath, 'utf8');
+
+      if (!contents.includes('<GoogleMaps/GoogleMaps.h>')) {
+        contents = `#import <GoogleMaps/GoogleMaps.h>\n${contents}`;
+        fs.writeFileSync(headerPath, contents, 'utf8');
+        console.log('[withGoogleMapsInit] Patched bridging header with GoogleMaps import.');
+      }
+
+      return mod;
+    },
+  ]);
+};
+
+// ── Step 2: patch AppDelegate.swift ──────────────────────────────────────────
+const withGoogleMapsAppDelegate = (config) => {
   return withAppDelegate(config, (mod) => {
     let contents = mod.modResults.contents;
 
-    // Only patch Swift AppDelegate (not ObjC .mm files)
-    if (!mod.modResults.language === 'swift' && !contents.includes('import ExpoModulesCore') && !contents.includes('ExpoAppDelegate')) {
+    // Only touch Swift AppDelegate
+    if (!contents.includes('ExpoAppDelegate')) {
       return mod;
     }
 
@@ -26,7 +63,6 @@ const withGoogleMapsInit = (config) => {
       return mod;
     }
 
-    // Read the API key from app config (set via app.json ios.config.googleMapsApiKey)
     const apiKey =
       config.ios?.config?.googleMapsApiKey ||
       process.env.GOOGLE_MAPS_API_KEY ||
@@ -37,14 +73,8 @@ const withGoogleMapsInit = (config) => {
       return mod;
     }
 
-    // 1. Add the import after existing imports
-    contents = contents.replace(
-      'import ReactAppDependencyProvider',
-      'import ReactAppDependencyProvider\nimport GoogleMaps'
-    );
-
-    // 2. Inject the GMSServices call as the very first line inside didFinishLaunchingWithOptions
-    //    We look for the opening of the function body (the line after the `-> Bool {`)
+    // Inject GMSServices call as the first line inside didFinishLaunchingWithOptions.
+    // We match the `-> Bool {` that closes the function signature and insert after it.
     contents = contents.replace(
       /(\) -> Bool \{\n)/,
       `$1    GMSServices.provideAPIKey("${apiKey}")\n`
@@ -53,6 +83,13 @@ const withGoogleMapsInit = (config) => {
     mod.modResults.contents = contents;
     return mod;
   });
+};
+
+// ── Compose both patches ──────────────────────────────────────────────────────
+const withGoogleMapsInit = (config) => {
+  config = withGoogleMapsBridgingHeader(config);
+  config = withGoogleMapsAppDelegate(config);
+  return config;
 };
 
 module.exports = withGoogleMapsInit;
