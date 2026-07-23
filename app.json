@@ -36,6 +36,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withGoogleMapsInit",
       "expo-router",
       [
         "expo-splash-screen",
